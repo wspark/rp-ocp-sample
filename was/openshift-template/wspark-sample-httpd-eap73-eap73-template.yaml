@@ -1,0 +1,278 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+labels:
+  template: wspark-sample-httpd-eap73-eap
+message: A new application for Redhat EAP has been created in your project.
+metadata:
+  annotations:
+    description: Sample OCP HTTPD-2.4 + EAP-7.3 Template
+    iconClass: icon-rh-tomcat
+    openshift.io/display-name: Sample OCP HTTPD-2.4 + EAP-7.3 Template
+    openshift.io/provider-display-name: OPENSHIFT
+    tags: eap7,redhat,webwas,wspark-sample-httpd-eap73-eap
+    version: "1.0"
+  name: wspark-sample-httpd-eap73-eap
+  namespace: openshift
+objects:
+- apiVersion: v1
+  kind: Service
+  metadata:
+    annotations:
+      description: The web server's http port.
+    labels:
+      application: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}
+  spec:
+    ports:
+    - name: 8000-tcp
+      port: 8000
+      targetPort: 8000
+    selector:
+      deploymentConfig: ${APPLICATION_NAME}
+- apiVersion: v1
+  id: ${APPLICATION_NAME}-http
+  kind: Route
+  metadata:
+    annotations:
+      description: Route for application's http service.
+    labels:
+      application: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}
+  spec:
+    host: ${HOSTNAME_HTTP}
+    path: /
+    port:
+      targetPort: 8080-tcp
+    to:
+      name: ${APPLICATION_NAME}
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    labels:
+      application: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}-web
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    labels:
+      application: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}-was
+- apiVersion: v1
+  kind: BuildConfig
+  metadata:
+    labels:
+      application: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}
+  spec:
+    output:
+      to:
+        kind: ImageStreamTag
+        name: ${APPLICATION_NAME}:latest
+    source:
+      contextDir: ${SSO_CONTEXT_DIR}
+      git:
+        ref: ${WEB_SOURCE_REPOSITORY_REF}
+        uri: ${WEB_SOURCE_REPOSITORY_URL}
+      type: Git
+    strategy:
+      dockerStrategy:
+        forcePull: true
+        from:
+          kind: ImageStreamTag
+          name: httpd:2.4.46
+          namespace: openshift
+      type: Docker
+    triggers:
+    - github:
+        secret: ${GITHUB_WEBHOOK_SECRET}
+      type: GitHub
+    - generic:
+        secret: ${GENERIC_WEBHOOK_SECRET}
+      type: Generic
+    - imageChange: {}
+      type: ImageChange
+    - type: ConfigChange
+- apiVersion: v1
+  kind: BuildConfig
+  metadata:
+    labels:
+      application: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}
+  spec:
+    output:
+      to:
+        kind: ImageStreamTag
+        name: ${APPLICATION_NAME}:${APP_VERSION}
+    source:
+      git:
+        uri: ${SOURCE_REPOSITORY_URL}
+      type: Git
+    strategy:
+      dockerStrategy:
+        forcePull: true
+        from:
+          kind: ImageStreamTag
+          name: eap73-openjdk8-openshift-rhel7:latest
+          namespace: openshift
+      type: Docker
+    triggers:
+    - github:
+        secret: ${GITHUB_WEBHOOK_SECRET}
+      type: GitHub
+    - generic:
+        secret: ${GENERIC_WEBHOOK_SECRET}
+      type: Generic
+    - imageChange: {}
+      type: ImageChange
+    - type: ConfigChange
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    labels:
+      application: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}
+  spec:
+    replicas: 1
+    selector:
+      deploymentConfig: ${APPLICATION_NAME}
+    strategy:
+      type: Rolling
+    template:
+      metadata:
+        labels:
+          application: ${APPLICATION_NAME}
+          deploymentConfig: ${APPLICATION_NAME}
+        name: ${APPLICATION_NAME}
+      spec:
+        containers:
+        - env:
+          - name: OPENSHIFT_KUBE_PING_LABELS
+            value: application=${APPLICATION_NAME}
+          - name: JAVA_OPTS
+            value: ${JAVA_OPTS}
+          image: ${APPLICATION_NAME}-was
+          imagePullPolicy: Always
+          name: ${APPLICATION_NAME}-was
+          ports:
+          - containerPort: 8778
+            name: jolokia
+            protocol: TCP
+          - containerPort: 8080
+            name: http
+            protocol: TCP
+          - containerPort: 8888
+            name: ping
+            protocol: TCP
+          volumeMounts:
+            - mountPath: /logs
+              name: ${WAS_LOG_PVC_NAME}
+            - mountPath: /app
+              name: ${WAS_APP_PVC_NAME}
+        - image: ${APPLICATION_NAME}
+          imagePullPolicy: Always
+          name: ${APPLICATION_NAME}
+          ports:
+          - containerPort: 8000
+            name: http
+            protocol: TCP
+          volumeMounts:
+            - mountPath: /logs
+              name: ${WEB_LOG_PVC_NAME}
+        terminationGracePeriodSeconds: 60
+        volumes:
+          - name: ${WAS_LOG_PVC_NAME}
+            persistentVolumeClaim:
+              claimName: ${WAS_LOG_PVC_NAME}
+          - name: ${WAS_APP_PVC_NAME}
+            persistentVolumeClaim:
+              claimName: ${WAS_APP_PVC_NAME}
+          - name: ${WEB_APP_PVC_NAME}
+            persistentVolumeClaim:
+              claimName: ${WEB_APP_PVC_NAME}
+    triggers:
+    - imageChangeParams:
+        automatic: true
+        containerNames:
+        - ${APPLICATION_NAME}
+        from:
+          kind: ImageStreamTag
+          name: ${APPLICATION_NAME}-web:latest
+      type: ImageChange
+    - imageChangeParams:
+        automatic: true
+        containerNames:
+        - ${APPLICATION_NAME}-jboss
+        from:
+          kind: ImageStreamTag
+          name: ${APPLICATION_NAME}-was:latest
+      type: ImageChange
+    - type: ConfigChange
+parameters:
+- description: The name for the application.
+  displayName: Application Name
+  name: APPLICATION_NAME
+  required: true
+  value: wspark-sample-httpd-eap73
+- description: 'Custom hostname for http service route.  Leave blank for default hostname,
+    e.g.: <application-name>-<project>.<default-domain-suffix>'
+  displayName: Custom http Route Hostname
+  name: HOSTNAME_HTTP
+  required: true
+  value: wspark-sample-httpd-eap73.apps.ps.example.com
+- description: Git source URI for WAS application
+  name: WAS_SOURCE_REPOSITORY_URL
+  required: true
+  value: https://github.com/wspark/rp-openshift-sample.git
+- description: Git branch/tag reference
+  displayName: Git Reference
+  name: WAS_SOURCE_REPOSITORY_REF
+  value:
+- description: Git source URI for WEB application
+  name: WEB_SOURCE_REPOSITORY_URL
+  required: true
+  value: https://github.com/wspark/rp-openshift-sample.git
+- description: Git branch/tag reference
+  name: WEB_SOURCE_REPOSITORY_REF
+- description: Path within Git project to build; empty for root project directory.
+  name: CONTEXT_DIR
+  value:
+- description: Path within Git project to build; empty for root project directory.
+  name: SSO_CONTEXT_DIR
+  value:
+- description: WEB LOG PVC Name
+  displayName: WEB LOG PVC Name
+  name: WEB_LOG_PVC_NAME
+  required: true
+  value: wspark-sample-httpd-eap73-web-logs-pvc
+- description: WAS LOG PVC Name
+  displayName: WAS LOG PVC Name
+  name: WAS_LOG_PVC_NAME
+  required: true
+  value: wspark-sample-httpd-eap73-was-logs-pvc
+- description: WAS APP PVC Name
+  displayName: WAS APP PVC Name
+  name: WAS_APP_PVC_NAME
+  required: true
+  value: wspark-sample-httpd-eap73-was-app-pvc
+- description: GitHub trigger secret
+  from: '[a-zA-Z0-9]{8}'
+  generate: expression
+  name: GITHUB_WEBHOOK_SECRET
+  required: true
+- description: Generic build trigger secret
+  from: '[a-zA-Z0-9]{8}'
+  generate: expression
+  name: GENERIC_WEBHOOK_SECRET
+  required: true
+- description: Java Options -DHOSTNAME=$HOSTNAME -Xms1024m -Xmx2048m -XX:+UseParallelOldGC -verbose:gc -XX:+PrintGCTimeStamps -XX:+PrintGCDetails -XX:+PrintHeapAtGC -Xloggc:/opt/webserver/logs/gc_${HOSTNAME}.log -XX:-HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/opt/webserver/logs/java_pid_${HOSTNAME}.hprof -XX:+ExplicitGCInvokesConcurrent -Duser.timezone=GMT+09:00
+  displayName: JAVA_OPTS
+  name: JAVA_OPTS
+  value: -DHOSTNAME=$HOSTNAME -Xms256m -Xmx512m -XX:+UseParallelOldGC -XX:MaxMetaspaceSize=512m -verbose:gc -XX:+PrintGCTimeStamps -XX:+PrintGCDetails -XX:+PrintHeapAtGC -Xloggc:/logs/gc_%p_%t.log -XX:-HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/logs/java_pid_%p_%t.hprof -XX:+ExplicitGCInvokesConcurrent -Djboss.server.log.dir=/logs -Djava.util.logging.manager=org.jboss.logmanager.LogManager -Djboss.modules.system.pkgs=org.jboss.byteman,org.jboss.logmanager -Duser.timezone=GMT+09:00
+- description: Namespace in which the ImageStreams for Red Hat Middleware images are
+    installed. These ImageStreams are normally installed in the openshift namespace.
+    You should only need to modify this if you've installed the ImageStreams in a
+    different namespace/project.
+  name: IMAGE_STREAM_NAMESPACE
+  required: true
+  value: openshift
+
