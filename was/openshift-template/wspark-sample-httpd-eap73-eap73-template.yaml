@@ -62,14 +62,14 @@ objects:
   metadata:
     labels:
       application: ${APPLICATION_NAME}
-    name: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}-web
   spec:
     output:
       to:
         kind: ImageStreamTag
-        name: ${APPLICATION_NAME}:latest
+        name: ${APPLICATION_NAME}-web:latest
     source:
-      contextDir: ${SSO_CONTEXT_DIR}
+      contextDir: ${WEB_CONTEXT_DIR}
       git:
         ref: ${WEB_SOURCE_REPOSITORY_REF}
         uri: ${WEB_SOURCE_REPOSITORY_URL}
@@ -97,15 +97,17 @@ objects:
   metadata:
     labels:
       application: ${APPLICATION_NAME}
-    name: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}-was
   spec:
     output:
       to:
         kind: ImageStreamTag
-        name: ${APPLICATION_NAME}:${APP_VERSION}
+        name: ${APPLICATION_NAME}-was
     source:
+      contextDir: ${WAS_CONTEXT_DIR}
       git:
-        uri: ${SOURCE_REPOSITORY_URL}
+        ref: ${WAS_SOURCE_REPOSITORY_REF}
+        uri: ${WAS_SOURCE_REPOSITORY_URL}
       type: Git
     strategy:
       dockerStrategy:
@@ -168,9 +170,9 @@ objects:
               name: ${WAS_LOG_PVC_NAME}
             - mountPath: /app
               name: ${WAS_APP_PVC_NAME}
-        - image: ${APPLICATION_NAME}
+        - image: ${APPLICATION_NAME}-web
           imagePullPolicy: Always
-          name: ${APPLICATION_NAME}
+          name: ${APPLICATION_NAME}-web
           ports:
           - containerPort: 8000
             name: http
@@ -234,10 +236,10 @@ parameters:
 - description: Git branch/tag reference
   name: WEB_SOURCE_REPOSITORY_REF
 - description: Path within Git project to build; empty for root project directory.
-  name: CONTEXT_DIR
+  name: WAS_CONTEXT_DIR
   value:
 - description: Path within Git project to build; empty for root project directory.
-  name: SSO_CONTEXT_DIR
+  name: WEB_CONTEXT_DIR
   value:
 - description: WEB LOG PVC Name
   displayName: WEB LOG PVC Name
