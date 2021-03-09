@@ -50,24 +50,24 @@ objects:
   metadata:
     labels:
       application: ${APPLICATION_NAME}
-    name: ${APPLICATION_NAME}-web
+    name: ${APPLICATION_NAME}
 - apiVersion: v1
   kind: ImageStream
   metadata:
     labels:
       application: ${APPLICATION_NAME}
-    name: ${APPLICATION_NAME}-was
+    name: ${APPLICATION_NAME}-jboss
 - apiVersion: v1
   kind: BuildConfig
   metadata:
     labels:
       application: ${APPLICATION_NAME}
-    name: ${APPLICATION_NAME}-web
+    name: ${APPLICATION_NAME}
   spec:
     output:
       to:
         kind: ImageStreamTag
-        name: ${APPLICATION_NAME}-web:latest
+        name: ${APPLICATION_NAME}:latest
     source:
       contextDir: ${WEB_CONTEXT_DIR}
       git:
@@ -97,17 +97,16 @@ objects:
   metadata:
     labels:
       application: ${APPLICATION_NAME}
-    name: ${APPLICATION_NAME}-was
+    name: ${APPLICATION_NAME}-jboss
   spec:
     output:
       to:
         kind: ImageStreamTag
-        name: ${APPLICATION_NAME}-was
+        name: ${APPLICATION_NAME}-jboss:latest
     source:
       contextDir: ${WAS_CONTEXT_DIR}
       git:
-        ref: ${WAS_SOURCE_REPOSITORY_REF}
-        uri: ${WAS_SOURCE_REPOSITORY_URL}
+        uri: ${SOURCE_REPOSITORY_URL}
       type: Git
     strategy:
       dockerStrategy:
@@ -152,9 +151,9 @@ objects:
             value: application=${APPLICATION_NAME}
           - name: JAVA_OPTS
             value: ${JAVA_OPTS}
-          image: ${APPLICATION_NAME}-was
+          image: ${APPLICATION_NAME}-jboss
           imagePullPolicy: Always
-          name: ${APPLICATION_NAME}-was
+          name: ${APPLICATION_NAME}-jboss
           ports:
           - containerPort: 8778
             name: jolokia
@@ -170,9 +169,9 @@ objects:
               name: ${WAS_LOG_PVC_NAME}
             - mountPath: /app
               name: ${WAS_APP_PVC_NAME}
-        - image: ${APPLICATION_NAME}-web
+        - image: ${APPLICATION_NAME}
           imagePullPolicy: Always
-          name: ${APPLICATION_NAME}-web
+          name: ${APPLICATION_NAME}
           ports:
           - containerPort: 8000
             name: http
@@ -188,9 +187,9 @@ objects:
           - name: ${WAS_APP_PVC_NAME}
             persistentVolumeClaim:
               claimName: ${WAS_APP_PVC_NAME}
-          - name: ${WEB_APP_PVC_NAME}
+          - name: ${WEB_LOG_PVC_NAME}
             persistentVolumeClaim:
-              claimName: ${WEB_APP_PVC_NAME}
+              claimName: ${WEB_LOG_PVC_NAME}
     triggers:
     - imageChangeParams:
         automatic: true
@@ -198,7 +197,7 @@ objects:
         - ${APPLICATION_NAME}
         from:
           kind: ImageStreamTag
-          name: ${APPLICATION_NAME}-web:latest
+          name: ${APPLICATION_NAME}:latest
       type: ImageChange
     - imageChangeParams:
         automatic: true
@@ -206,7 +205,7 @@ objects:
         - ${APPLICATION_NAME}-jboss
         from:
           kind: ImageStreamTag
-          name: ${APPLICATION_NAME}-was:latest
+          name: ${APPLICATION_NAME}-jboss:latest
       type: ImageChange
     - type: ConfigChange
 parameters:

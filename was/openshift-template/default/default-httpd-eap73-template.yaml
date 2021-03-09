@@ -50,13 +50,13 @@ objects:
   metadata:
     labels:
       application: ${APPLICATION_NAME}
-    name: ${APPLICATION_NAME}-web
+    name: ${APPLICATION_NAME}
 - apiVersion: v1
   kind: ImageStream
   metadata:
     labels:
       application: ${APPLICATION_NAME}
-    name: ${APPLICATION_NAME}-was
+    name: ${APPLICATION_NAME}-jboss
 - apiVersion: v1
   kind: BuildConfig
   metadata:
@@ -69,7 +69,7 @@ objects:
         kind: ImageStreamTag
         name: ${APPLICATION_NAME}:latest
     source:
-      contextDir: ${SSO_CONTEXT_DIR}
+      contextDir: ${WEB_CONTEXT_DIR}
       git:
         ref: ${WEB_SOURCE_REPOSITORY_REF}
         uri: ${WEB_SOURCE_REPOSITORY_URL}
@@ -97,13 +97,14 @@ objects:
   metadata:
     labels:
       application: ${APPLICATION_NAME}
-    name: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}-jboss
   spec:
     output:
       to:
         kind: ImageStreamTag
-        name: ${APPLICATION_NAME}:${APP_VERSION}
+        name: ${APPLICATION_NAME}-jboss:latest
     source:
+      contextDir: ${WAS_CONTEXT_DIR}
       git:
         uri: ${SOURCE_REPOSITORY_URL}
       type: Git
@@ -150,9 +151,9 @@ objects:
             value: application=${APPLICATION_NAME}
           - name: JAVA_OPTS
             value: ${JAVA_OPTS}
-          image: ${APPLICATION_NAME}-was
+          image: ${APPLICATION_NAME}-jboss
           imagePullPolicy: Always
-          name: ${APPLICATION_NAME}-was
+          name: ${APPLICATION_NAME}-jboss
           ports:
           - containerPort: 8778
             name: jolokia
@@ -186,9 +187,9 @@ objects:
           - name: ${WAS_APP_PVC_NAME}
             persistentVolumeClaim:
               claimName: ${WAS_APP_PVC_NAME}
-          - name: ${WEB_APP_PVC_NAME}
+          - name: ${WEB_LOG_PVC_NAME}
             persistentVolumeClaim:
-              claimName: ${WEB_APP_PVC_NAME}
+              claimName: ${WEB_LOG_PVC_NAME}
     triggers:
     - imageChangeParams:
         automatic: true
@@ -196,7 +197,7 @@ objects:
         - ${APPLICATION_NAME}
         from:
           kind: ImageStreamTag
-          name: ${APPLICATION_NAME}-web:latest
+          name: ${APPLICATION_NAME}:latest
       type: ImageChange
     - imageChangeParams:
         automatic: true
@@ -204,7 +205,7 @@ objects:
         - ${APPLICATION_NAME}-jboss
         from:
           kind: ImageStreamTag
-          name: ${APPLICATION_NAME}-was:latest
+          name: ${APPLICATION_NAME}-jboss:latest
       type: ImageChange
     - type: ConfigChange
 parameters:
@@ -234,10 +235,10 @@ parameters:
 - description: Git branch/tag reference
   name: WEB_SOURCE_REPOSITORY_REF
 - description: Path within Git project to build; empty for root project directory.
-  name: CONTEXT_DIR
+  name: WAS_CONTEXT_DIR
   value:
 - description: Path within Git project to build; empty for root project directory.
-  name: SSO_CONTEXT_DIR
+  name: WEB_CONTEXT_DIR
   value:
 - description: WEB LOG PVC Name
   displayName: WEB LOG PVC Name
